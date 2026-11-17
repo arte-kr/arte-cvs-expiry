@@ -36,18 +36,27 @@ function enablePushNotifications() {
   if (!pushSupported()) {
     return;
   }
-  navigator.serviceWorker
-    .register("sw.js")
-    .then(function (reg) {
-      return Notification.requestPermission().then(function (perm) {
-        if (perm !== "granted") {
-          return null;
+  // 클릭(사용자 동작)과 권한 요청 사이에 다른 비동기 작업이 끼면 일부 브라우저(안드로이드 크롬 등)가
+  // 허용 창을 아예 안 띄우고 조용히 넘어갈 수 있어, 권한 요청을 클릭 직후 가장 먼저 부른다.
+  Notification.requestPermission()
+    .then(function (perm) {
+      if (perm !== "granted") {
+        if (typeof confirmDialog === "function") {
+          confirmDialog({ title: "알림 권한이 필요합니다", message: "방금 뜬 허용 창에서 허용을 눌러야 알림을 받을 수 있습니다. 다시 시도해 주세요.", infoOnly: true });
         }
-        return reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(PUSH_VAPID_PUBLIC_KEY),
+        return null;
+      }
+      return navigator.serviceWorker
+        .register("sw.js")
+        .then(function () {
+          return navigator.serviceWorker.ready;
+        })
+        .then(function (reg) {
+          return reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(PUSH_VAPID_PUBLIC_KEY),
+          });
         });
-      });
     })
     .then(function (sub) {
       if (!sub) {
