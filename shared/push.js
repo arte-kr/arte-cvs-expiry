@@ -67,22 +67,28 @@ function enablePushNotifications() {
         "POST",
         "/rest/v1/cvs_push_subscriptions?on_conflict=endpoint",
         [{ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth, last_seen_at: new Date().toISOString() }],
-        { Prefer: "resolution=merge-duplicates,return=minimal" }
+        // return=minimal이면 서버가 빈 응답을 주는데 boot.js의 request()가 204가 아닌 빈 응답은 그대로 JSON으로 읽으려다 오류가 났다 — representation으로 받아 피한다.
+        { Prefer: "resolution=merge-duplicates,return=representation" }
       );
     })
     .then(function (result) {
       if (result === null) {
         return;
       }
-      if (typeof confirmDialog === "function") {
-        confirmDialog({ title: "알림을 켰습니다", message: "이 기기로 유통기한 알림을 받습니다.", infoOnly: true });
-      }
+      // 알림창(.shell-alert-dialog)이 열려 있는 상태라, 안내창을 먼저 띄우면 모달이 겹쳐서 제대로 안 보일 수 있다 — 알림창부터 닫는다.
       var dlg = document.querySelector(".shell-alert-dialog");
       if (dlg) {
         dlg.close();
       }
+      if (typeof confirmDialog === "function") {
+        confirmDialog({ title: "알림을 켰습니다", message: "이 기기로 유통기한 알림을 받습니다.", infoOnly: true });
+      }
     })
     .catch(function (e) {
+      var dlg = document.querySelector(".shell-alert-dialog");
+      if (dlg) {
+        dlg.close();
+      }
       if (typeof confirmDialog === "function") {
         confirmDialog({ title: "알림을 켜지 못했습니다", message: String((e && e.message) || e), infoOnly: true });
       }
