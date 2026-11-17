@@ -41,12 +41,13 @@ function alertAtOf(expiresAt) {
   return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10), Math.floor(CVS_EVENING_ALERT_MIN / 60), CVS_EVENING_ALERT_MIN % 60);
 }
 
-// 지남(기한 이후) / 임박(알림 시각 이후~기한 전) / 대기
+// 지남(기한 이후, 미처리) / 임박(확인일이 오늘이거나 이미 지났는데 아직 기한 전) / 대기(확인일이 아직 안 됨)
+// 화면 뱃지는 "오늘 처리할 건지"만 본다 — 알림(웹푸시)이 울리는 시각(alertAtOf)과는 별개 기준이다(2026-11-17, 사용자 결정으로 분리).
 function statusOf(expiresAt, now) {
   if (now.getTime() >= expiresAt.getTime()) {
     return "overdue";
   }
-  if (now.getTime() >= alertAtOf(expiresAt).getTime()) {
+  if (checkDateOf(expiresAt) <= cvsYmd(now)) {
     return "soon";
   }
   return "waiting";
