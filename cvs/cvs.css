@@ -1042,6 +1042,11 @@
   background: #f8fafc;
 }
 
+/* 알림 켜기 버튼 줄(push.js) */
+.shell-push-row {
+  margin: 12px 0 0;
+}
+
 /* 알림창 아래 안내 문구 */
 .shell-alert-note {
   margin: 12px 0 0;
