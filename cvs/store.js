@@ -105,7 +105,12 @@ var cvsStore = (function () {
       var found = mem.productRows.filter(function (p) {
         return !p.deleted_at && p.barcode === clean;
       })[0];
-      return found ? { name: found.name, barcode: found.barcode } : null;
+      return found ? { name: found.name, barcode: found.barcode, lastZone: found.last_zone } : null;
+    },
+    // 상품명으로 등록된 상품 찾기(자동완성 선택 시 구역 기본값 조회용). 없으면 null
+    findProductRecordByName: function (name) {
+      var found = findActiveProductRow(name);
+      return found ? { name: found.name, barcode: found.barcode, lastZone: found.last_zone } : null;
     },
     // 구역 목록(추가한 순서)
     listZones: function () {
@@ -141,6 +146,22 @@ var cvsStore = (function () {
             return toItem(rows[0]);
           });
       });
+    },
+    // 상품의 "마지막 등록 구역"을 기억해 둔다(다음에 바코드로 찍거나 이름을 고르면 기본값으로 쓰기 위함, 모든 기기 공용).
+    // 등록 자체는 이미 끝난 뒤에 부가로 남기는 정보라, 실패해도 조용히 무시한다(등록 성공 여부와는 무관).
+    rememberProductZone: function (name, zone) {
+      var row = findActiveProductRow(name);
+      if (!row || row.last_zone === zone) {
+        return Promise.resolve();
+      }
+      return db()
+        .request("PATCH", "/rest/v1/cvs_products?id=eq." + encodeURIComponent(row.id), { last_zone: zone }, { Prefer: "return=representation" })
+        .then(function (rows) {
+          if (rows && rows[0]) {
+            row.last_zone = rows[0].last_zone;
+          }
+        })
+        .catch(function () {});
     },
     // patch: { name?, zone?, expiresAt? }
     updateItem: function (id, patch) {

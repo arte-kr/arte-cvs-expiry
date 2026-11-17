@@ -167,8 +167,35 @@ document.addEventListener("DOMContentLoaded", function () {
     var timeInput = document.getElementById("time-input");
     var preview = document.getElementById("rule-preview");
 
+    // 상품이 마지막으로 등록됐던 구역을 기본값으로 선택해 준다(구역이 설정에서 삭제됐으면 조용히 무시하고 그대로 둔다)
+    function applyZoneDefault(zone) {
+      if (!zone) {
+        return;
+      }
+      var matched = false;
+      Array.prototype.forEach.call(document.getElementById("zone-group").querySelectorAll("label"), function (l) {
+        var input = l.querySelector("input");
+        if (input.value === zone) {
+          input.checked = true;
+          matched = true;
+        }
+        l.classList.toggle("form-radio-active", input.checked);
+      });
+      if (matched) {
+        state.zone = zone;
+        saveZone(zone);
+      }
+    }
+
     attachProductSuggest(nameInput, function () {
       return cvsStore.listProducts();
+    });
+    // 자동완성으로 고르거나(값 변경 시 change 이벤트 발생) 기존 상품명을 그대로 입력해 확정했을 때, 그 상품의 마지막 구역을 기본값으로 적용
+    nameInput.addEventListener("change", function () {
+      var rec = cvsStore.findProductRecordByName(nameInput.value);
+      if (rec) {
+        applyZoneDefault(rec.lastZone);
+      }
     });
     attachDatePicker(dateInput, {});
     document.getElementById("barcode-btn").addEventListener("click", function () {
@@ -180,6 +207,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (rec) {
           state.barcode = "";
           nameInput.value = rec.name;
+          applyZoneDefault(rec.lastZone);
           nameInput.focus();
         } else {
           state.barcode = code;
@@ -238,6 +266,7 @@ document.addEventListener("DOMContentLoaded", function () {
       var timeVal = timeInput.value;
       cvsStore.addItem({ name: name, zone: state.zone, expiresAt: exp, barcode: state.barcode }).then(
         function (item) {
+          cvsStore.rememberProductZone(item.name, item.zone);
           state.name = "";
           state.time = "";
           state.barcode = "";
