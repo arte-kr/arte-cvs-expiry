@@ -1,7 +1,7 @@
 // register.html(유통기한등록) — 상품명(자동완성) + 구역 + 유통기한(날짜·시) → cvsStore.addItem.
 // 아래에는 "일자별 등록현황"(처리 전 건을 유통기한 날짜별로 묶어 보여 주고, 여기서 바로 [수정])을 둔다.
 // 등록하면 화면을 다시 그린다(헤더 🔔 개수도 함께 갱신). 구역·날짜는 연속 입력을 위해 유지하고 상품명·시간만 비운다.
-// 바코드 버튼 아이콘(shell.js 아이콘과 같은 선 굵기의 카메라 모양). 실제 인식은 준비 중 — bind()의 barcode-btn 클릭 참고.
+// 바코드 버튼 아이콘(shell.js 아이콘과 같은 선 굵기의 카메라 모양). 실제 인식은 barcode-scan.js의 openBarcodeScanner — bind()의 barcode-btn 클릭 참고.
 var BARCODE_ICON =
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
   '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> ';
@@ -9,7 +9,7 @@ var BARCODE_ICON =
 document.addEventListener("DOMContentLoaded", function () {
   var app = document.getElementById("app");
   var ZONE_KEY = "cvs_last_zone";
-  var state = { name: "", zone: loadZone(), date: todayStr(), time: "", message: null, statusDay: todayStr() }; // time "" = 시간 없음(23:59). name은 중복 등록 안내 때 입력을 되살리는 용도. statusDay = 아래 등록현황에서 조회 중인 날(기본 오늘)
+  var state = { name: "", zone: loadZone(), date: todayStr(), time: "", message: null, statusDay: todayStr(), barcode: "" }; // time "" = 시간 없음(23:59). name은 중복 등록 안내 때 입력을 되살리는 용도. statusDay = 아래 등록현황에서 조회 중인 날(기본 오늘). barcode = 촬영했지만 기존 상품이 없어 신규 등록될 때 같이 붙일 번호
   var firstRender = true;
 
   function todayStr() {
@@ -172,10 +172,25 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     attachDatePicker(dateInput, {});
     document.getElementById("barcode-btn").addEventListener("click", function () {
-      confirmDialog({
-        title: "바코드 인식은 준비 중입니다",
-        message: "지금은 상품명을 직접 입력해 주세요. 카메라로 바코드를 찍어 상품을 불러오는 기능은 추후 추가됩니다.",
-        infoOnly: true,
+      openBarcodeScanner().then(function (code) {
+        if (!code) {
+          return;
+        }
+        var rec = cvsStore.findProductByBarcode(code);
+        if (rec) {
+          state.barcode = "";
+          nameInput.value = rec.name;
+          nameInput.focus();
+        } else {
+          state.barcode = code;
+          confirmDialog({
+            title: "등록된 상품이 없습니다",
+            message: "바코드 " + code + " 로 등록된 상품이 없습니다. 상품명을 입력해 신규 등록해 주세요(이 번호가 같이 저장됩니다).",
+            infoOnly: true,
+          }).then(function () {
+            nameInput.focus();
+          });
+        }
       });
     });
 
@@ -221,10 +236,11 @@ document.addEventListener("DOMContentLoaded", function () {
       var submitBtn = form.querySelector('[type="submit"]');
       submitBtn.disabled = true;
       var timeVal = timeInput.value;
-      cvsStore.addItem({ name: name, zone: state.zone, expiresAt: exp }).then(
+      cvsStore.addItem({ name: name, zone: state.zone, expiresAt: exp, barcode: state.barcode }).then(
         function (item) {
           state.name = "";
           state.time = "";
+          state.barcode = "";
           state.message = { kind: "success", text: "등록했습니다 · " + item.name + " · " + previewText(state.date, timeVal) };
           render();
         },

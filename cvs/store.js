@@ -42,14 +42,15 @@ var cvsStore = (function () {
   }
 
   // 새 상품명이면 cvs_products에 먼저 추가하고, 있으면 기존 표기를 그대로 쓴다. 등록된 상품명을 Promise로 돌려준다.
-  function ensureProductName(rawName) {
+  // barcode: 바코드 촬영으로 새로 찾은 번호가 있으면 신규 상품에 같이 붙인다(기존 상품이면 무시 — 상품마다 바코드는 설정 화면에서만 고친다).
+  function ensureProductName(rawName, barcode) {
     var clean = normalizeName(rawName);
     var existing = findActiveProductRow(clean);
     if (existing) {
       return Promise.resolve(existing.name);
     }
     return db()
-      .request("POST", "/rest/v1/cvs_products", [{ name: clean, barcode: "" }], { Prefer: "return=representation" })
+      .request("POST", "/rest/v1/cvs_products", [{ name: clean, barcode: normalizeName(barcode || "") }], { Prefer: "return=representation" })
       .then(function (rows) {
         mem.productRows.push(rows[0]);
         return rows[0].name;
@@ -95,6 +96,17 @@ var cvsStore = (function () {
           return a.name.localeCompare(b.name, "ko");
         });
     },
+    // 바코드로 등록된 상품 찾기(촬영용). 없으면 null
+    findProductByBarcode: function (barcode) {
+      var clean = normalizeName(barcode || "");
+      if (!clean) {
+        return null;
+      }
+      var found = mem.productRows.filter(function (p) {
+        return !p.deleted_at && p.barcode === clean;
+      })[0];
+      return found ? { name: found.name, barcode: found.barcode } : null;
+    },
     // 구역 목록(추가한 순서)
     listZones: function () {
       return mem.zoneRows
@@ -120,7 +132,7 @@ var cvsStore = (function () {
 
     // ---- 쓰기(전부 Promise) ----
     addItem: function (input) {
-      return ensureProductName(input.name).then(function (name) {
+      return ensureProductName(input.name, input.barcode).then(function (name) {
         var row = { name: name, zone: input.zone, expires_at: input.expiresAt.toISOString(), status: "active" };
         return db()
           .request("POST", "/rest/v1/cvs_items", [row], { Prefer: "return=representation" })
