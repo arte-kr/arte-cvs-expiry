@@ -1,0 +1,81 @@
+// 웹 푸시 알림 켜기(3단계). 기기마다 한 번 허용받아 구독 정보를 cvs_push_subscriptions에 저장한다.
+// shell.js의 알림창이 pushEnableRowHtml()을 불러 상태 줄(버튼/안내)을 보여주고, 버튼 클릭은 shell.js의 위임 클릭 처리에서 enablePushNotifications()를 부른다.
+// 공개 열쇠라 화면 코드에 그대로 둬도 된다(비밀 열쇠는 서버 쪽에만, Supabase Edge Function Secrets).
+var PUSH_VAPID_PUBLIC_KEY = "BGIeO7o_pQn_KyFYc4vpzV9cx45zY6DSPO7UzC6m4JFpYwjso_bvah-0Rwjh4Ahq5MKkX40mYeJqoNXmmIVpn4A";
+
+function pushSupported() {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  var rawData = atob(base64);
+  return Uint8Array.from(
+    [...rawData].map(function (c) {
+      return c.charCodeAt(0);
+    })
+  );
+}
+
+// 알림창에 보여줄 상태 줄. 미지원·이미 켜짐이면 조용히 아무것도 안 보여준다(매번 번거롭게 안내하지 않음).
+function pushEnableRowHtml() {
+  if (!pushSupported()) {
+    return "";
+  }
+  if (Notification.permission === "denied") {
+    return '<p class="shell-alert-note">알림이 차단돼 있습니다. 브라우저의 이 사이트 알림 권한을 허용으로 바꿔 주세요.</p>';
+  }
+  if (Notification.permission === "granted") {
+    return "";
+  }
+  return '<div class="shell-push-row"><button type="button" class="btn-small" data-push-enable="1">이 기기로 알림 받기</button></div>';
+}
+
+function enablePushNotifications() {
+  if (!pushSupported()) {
+    return;
+  }
+  navigator.serviceWorker
+    .register("sw.js")
+    .then(function (reg) {
+      return Notification.requestPermission().then(function (perm) {
+        if (perm !== "granted") {
+          return null;
+        }
+        return reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(PUSH_VAPID_PUBLIC_KEY),
+        });
+      });
+    })
+    .then(function (sub) {
+      if (!sub) {
+        return null;
+      }
+      var json = sub.toJSON();
+      return window.cvsDb.request(
+        "POST",
+        "/rest/v1/cvs_push_subscriptions?on_conflict=endpoint",
+        [{ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth, last_seen_at: new Date().toISOString() }],
+        { Prefer: "resolution=merge-duplicates,return=minimal" }
+      );
+    })
+    .then(function (result) {
+      if (result === null) {
+        return;
+      }
+      if (typeof confirmDialog === "function") {
+        confirmDialog({ title: "알림을 켰습니다", message: "이 기기로 유통기한 알림을 받습니다.", infoOnly: true });
+      }
+      var dlg = document.querySelector(".shell-alert-dialog");
+      if (dlg) {
+        dlg.close();
+      }
+    })
+    .catch(function (e) {
+      if (typeof confirmDialog === "function") {
+        confirmDialog({ title: "알림을 켜지 못했습니다", message: String((e && e.message) || e), infoOnly: true });
+      }
+    });
+}

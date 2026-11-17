@@ -63,6 +63,7 @@ function openShellAlerts() {
           .join("") +
         "</ul>" +
         (typeof getShellAlertNote === "function" && getShellAlertNote() ? '<p class="shell-alert-note">' + shellEsc(getShellAlertNote()) + "</p>" : "")) +
+    (typeof pushEnableRowHtml === "function" ? pushEnableRowHtml() : "") +
     '<div class="shell-alert-actions"><button type="button" data-close="1">확인</button></div>';
   dlg.addEventListener("click", function (e) {
     if (e.target === dlg || e.target.closest("[data-close]")) {
@@ -79,5 +80,8 @@ function openShellAlerts() {
 document.addEventListener("click", function (e) {
   if (e.target.closest("#shell-bell")) {
     openShellAlerts();
+  }
+  if (e.target.closest("[data-push-enable]") && typeof enablePushNotifications === "function") {
+    enablePushNotifications();
   }
 });
